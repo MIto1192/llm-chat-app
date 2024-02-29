@@ -1,5 +1,6 @@
 import io
 import logging
+import ast
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import openai
@@ -37,22 +38,79 @@ def healthcheck():
     return {}
 
 
+# @app.get("/llm")
 @app.post("/llm")
 def run_llm(message: Message) -> LLMResponse:
-    answer = ask_question(message.text)
+    answer = ask_question(message)
     return LLMResponse(text=answer)
+    # return message
 
+# @app.websocket("/chat")
+# async def websocket_endpoint(ws: WebSocket):
+#     await ws.accept()
+#     # create agent
+#     print("1")
+#     chain = create_conversational_chain()
+#     print("2")
+#     while True:
+#         try:
+#             # Receive and send back the client message
+#             question = await ws.receive_text()
+#             answer = chain.predict(input=question)
+#             resp = LLMResponse(text=answer)
+#             await ws.send_json(resp.dict())
+#         except WebSocketDisconnect:
+#             break
+#         except Exception as e:
+#             logging.error(e)
+#             resp = LLMResponse(
+#                 text="Error happern.",
+#             )
+#             await ws.send_json(resp.dict())
 
+# 会話履歴保持しないタイプ用
+# @app.websocket("/chat")
+# async def websocket_endpoint(ws: WebSocket):
+#     await ws.accept()
+#     # create agent
+#     print("1")
+#     chain = create_conversational_chain()
+#     print("2")
+#     while True:
+#         try:
+#             # Receive and send back the client message
+#             question = await ws.receive_text()
+#             print(question)
+#             answer = chain.invoke({"input": question})
+#             print(answer)
+#             resp = LLMResponse(text=answer.content)
+#             await ws.send_json(resp.dict())
+#         except WebSocketDisconnect:
+#             break
+#         except Exception as e:
+#             logging.error(e)
+#             resp = LLMResponse(
+#                 text="Error happern.",
+#             )
+#             await ws.send_json(resp.dict())
+
+# 会話履歴保持する用
 @app.websocket("/chat")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     # create agent
     chain = create_conversational_chain()
     while True:
-        try:
+        try:            
             # Receive and send back the client message
-            question = await ws.receive_text()
-            answer = chain.predict(input=question)
+            questions = await ws.receive_text()
+            questions_ary = ast.literal_eval(questions)
+            if len(questions_ary) > 1:
+                print("dummy")
+                answer = chain.predict(human_input='',input=questions_ary[0],context=''.join(questions_ary[1:]))
+            else:
+                print("dumm2")
+                answer = chain.predict(human_input='',input=questions_ary[0],context='なし')
             resp = LLMResponse(text=answer)
             await ws.send_json(resp.dict())
         except WebSocketDisconnect:
@@ -63,6 +121,7 @@ async def websocket_endpoint(ws: WebSocket):
                 text="Error happern.",
             )
             await ws.send_json(resp.dict())
+
 
 @app.post("/whisper/")
 async def text_to_speech(file: UploadFile) -> WhisperResponse:
